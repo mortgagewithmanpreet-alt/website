@@ -13,11 +13,14 @@ const getTransporter = () => {
   const pass = rawPass.replace(/\s+/g, '');
 
   cachedTransporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // use STARTTLS
+    family: 4, // FORCE IPv4 to fix ENETUNREACH on Render, Vercel, Heroku, AWS
     pool: true,
     maxConnections: 5,
     maxMessages: 100,
-    rateLimit: 14, // 14 messages per second
+    rateLimit: 14,
     auth: { user, pass }
   });
 

@@ -40,7 +40,7 @@ export async function submitFormToEmail(formType, formData) {
         'Accept': 'application/json'
       },
       body: JSON.stringify({ formType, formData })
-    }, 4000);
+    }, 12000);
 
     if (res.ok) {
       const result = await res.json().catch(() => null);
@@ -49,7 +49,7 @@ export async function submitFormToEmail(formType, formData) {
       }
     }
   } catch (err) {
-    console.warn('[Tier 1 fast mailer skipped, attempting direct fallback]:', err.name || err.message);
+    console.warn('[Tier 1 mailer failed, attempting direct fallback]:', err.name || err.message);
   }
 
   // --- TIER 2: Fast Browser Direct Mailer (Instant static delivery) ---
