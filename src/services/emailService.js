@@ -30,7 +30,29 @@ export async function submitFormToEmail(formType, formData) {
     }
   };
 
-  // --- TIER 1: Primary Direct FormSubmit with Activated Token ---
+  // --- TIER 1: Vercel / Node Serverless API (/api/send-email) ---
+  try {
+    const nodeEndpoint = `${API_BASE_URL}/api/send-email`;
+    const res = await fetchWithTimeout(nodeEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ formType, formData })
+    }, 8000);
+
+    if (res.ok) {
+      const result = await res.json().catch(() => null);
+      if (result && result.success) {
+        return { success: true, data: result, provider: 'vercel-node-smtp' };
+      }
+    }
+  } catch (err) {
+    console.warn('[Tier 1 Vercel/Node mailer skipped, using Tier 2]:', err.message);
+  }
+
+  // --- TIER 2: Direct FormSubmit with Token ---
   try {
     const directRes = await fetchWithTimeout('https://formsubmit.co/ajax/81792bd5c264b377552aee76b1e57f41', {
       method: 'POST',
@@ -57,10 +79,10 @@ export async function submitFormToEmail(formType, formData) {
       }
     }
   } catch (err) {
-    console.warn('[Tier 1 direct mailer warning, trying Tier 2 backend]:', err.message);
+    console.warn('[Tier 2 direct mailer warning, trying Tier 3]:', err.message);
   }
 
-  // --- TIER 2: Direct email fallback ---
+  // --- TIER 3: Direct email fallback ---
   try {
     const fallbackRes = await fetchWithTimeout('https://formsubmit.co/ajax/eveswebworks@gmail.com', {
       method: 'POST',
@@ -82,28 +104,6 @@ export async function submitFormToEmail(formType, formData) {
     if (fallbackRes.ok) {
       const fbResult = await fallbackRes.json().catch(() => null);
       return { success: true, data: fbResult, provider: 'formsubmit-direct' };
-    }
-  } catch (err) {
-    console.warn('[Tier 2 fallback warning]:', err.message);
-  }
-
-  // --- TIER 3: Local / Vercel / Node backend (/api/send-email) ---
-  try {
-    const nodeEndpoint = `${API_BASE_URL}/api/send-email`;
-    const res = await fetchWithTimeout(nodeEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ formType, formData })
-    }, 5000);
-
-    if (res.ok) {
-      const result = await res.json().catch(() => null);
-      if (result && result.success) {
-        return { success: true, data: result, provider: 'node-smtp' };
-      }
     }
   } catch (err) {
     console.error('[All tiers complete]:', err.message);
