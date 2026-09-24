@@ -2,17 +2,28 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Create reusable nodemailer transporter
+// Singleton pooled nodemailer transporter for instant dispatch
+let cachedTransporter = null;
+
 const getTransporter = () => {
+  if (cachedTransporter) return cachedTransporter;
+
   const user = process.env.EMAIL_USER || 'eveswebworks@gmail.com';
   const rawPass = process.env.EMAIL_PASS || 'pwwgnljgevtuqpmq';
   const pass = rawPass.replace(/\s+/g, '');
 
-  return nodemailer.createTransport({
+  cachedTransporter = nodemailer.createTransport({
     service: 'gmail',
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    rateLimit: 14, // 14 messages per second
     auth: { user, pass }
   });
+
+  return cachedTransporter;
 };
+
 
 // Generate styled HTML template for emails
 export function generateEmailHtml(formType, data) {

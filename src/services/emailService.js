@@ -13,17 +13,34 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export async function submitFormToEmail(formType, formData) {
-  // --- TIER 1: Node / Vercel / Express Backend (/api/send-email) ---
+  // Helper for fast fetch with timeout
+  const fetchWithTimeout = async (url, options, timeoutMs = 3000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
+
+  // --- TIER 1: Fast Node / Vercel / Express Backend (/api/send-email) ---
   try {
     const nodeEndpoint = `${API_BASE_URL}/api/send-email`;
-    const res = await fetch(nodeEndpoint, {
+    const res = await fetchWithTimeout(nodeEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
       body: JSON.stringify({ formType, formData })
-    });
+    }, 4000);
 
     if (res.ok) {
       const result = await res.json().catch(() => null);
@@ -32,34 +49,12 @@ export async function submitFormToEmail(formType, formData) {
       }
     }
   } catch (err) {
-    console.warn('[Tier 1 Mailer failed, trying Tier 2 PHP/Direct]', err.message);
+    console.warn('[Tier 1 fast mailer skipped, attempting direct fallback]:', err.name || err.message);
   }
 
-  // --- TIER 2: PHP Mailer on Apache / cPanel (/api/send-email.php) ---
+  // --- TIER 2: Fast Browser Direct Mailer (Instant static delivery) ---
   try {
-    const phpEndpoint = `${API_BASE_URL}/api/send-email.php`;
-    const phpRes = await fetch(phpEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ formType, formData })
-    });
-
-    if (phpRes.ok) {
-      const phpResult = await phpRes.json().catch(() => null);
-      if (phpResult && phpResult.success) {
-        return { success: true, data: phpResult, provider: 'php-mail' };
-      }
-    }
-  } catch (err) {
-    console.warn('[Tier 2 PHP Mailer failed, trying Tier 3 Direct]', err.message);
-  }
-
-  // --- TIER 3: Universal Browser Direct Mailer (Works on any static live server) ---
-  try {
-    const directRes = await fetch('https://formsubmit.co/ajax/eveswebworks@gmail.com', {
+    const directRes = await fetchWithTimeout('https://formsubmit.co/ajax/eveswebworks@gmail.com', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,11 +68,33 @@ export async function submitFormToEmail(formType, formData) {
         'Form Type': formType,
         ...formData
       })
-    });
+    }, 4000);
 
     if (directRes.ok) {
       const directResult = await directRes.json().catch(() => null);
       return { success: true, data: directResult, provider: 'browser-direct' };
+    }
+  } catch (err) {
+    console.warn('[Tier 2 direct mailer failed]:', err.name || err.message);
+  }
+
+  // --- TIER 3: PHP Mailer on Apache / cPanel (/api/send-email.php) ---
+  try {
+    const phpEndpoint = `${API_BASE_URL}/api/send-email.php`;
+    const phpRes = await fetchWithTimeout(phpEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ formType, formData })
+    }, 3000);
+
+    if (phpRes.ok) {
+      const phpResult = await phpRes.json().catch(() => null);
+      if (phpResult && phpResult.success) {
+        return { success: true, data: phpResult, provider: 'php-mail' };
+      }
     }
   } catch (err) {
     console.error('[All email delivery tiers failed]:', err);
